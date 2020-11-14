@@ -253,6 +253,7 @@ extern AVCodec ff_ppm_encoder;
 extern AVCodec ff_ppm_decoder;
 extern AVCodec ff_prores_encoder;
 extern AVCodec ff_prores_decoder;
+extern AVCodec amcdx_cupr_decoder;
 extern AVCodec ff_prores_aw_encoder;
 extern AVCodec ff_prores_ks_encoder;
 extern AVCodec ff_prosumer_decoder;
