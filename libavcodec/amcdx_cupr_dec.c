@@ -14,6 +14,7 @@ typedef void (* amcdx_pr_decoder_destroy)(void * );
 typedef unsigned int(* amcdx_pr_get_width)(void * );
 typedef unsigned int(* amcdx_pr_get_height)(void *);
 typedef int (* amcdx_pr_is_444)(void *);
+typedef int (* amcdx_pr_clean)(void * decoder);
 
 typedef struct {
     HMODULE m_library;
@@ -26,6 +27,7 @@ typedef struct {
     amcdx_pr_decoder_read_pitch m_read2d;
     amcdx_pr_decoder_destroy m_destroy;
     amcdx_pr_is_444          m_is_444;
+    amcdx_pr_clean m_clean;
 
     void * m_decoder;
 } AMCDXCUPRContext;
@@ -73,7 +75,7 @@ static av_cold int decode_init(AVCodecContext *avctx)
     ctx->m_destroy    = (amcdx_pr_decoder_destroy)GetProcAddress(ctx->m_library, "amcdx_cupr_decoder_destroy");
     ctx->m_is_444     = (amcdx_pr_is_444)GetProcAddress(ctx->m_library, "amcdx_cupr_is_444");
     ctx->m_read2d     = (amcdx_pr_decoder_read_pitch)GetProcAddress(ctx->m_library, "amcdx_cupr_decoder_read_pitch");
-
+    ctx->m_clean     = (amcdx_pr_decoder_read_pitch)GetProcAddress(ctx->m_library, "amcdx_cupr_cleanup");
     ctx->m_decoder = ctx->m_create();
 
     if (!ctx->m_decoder) {
@@ -91,16 +93,16 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
     const uint8_t *buf = avpkt->data;
     int buf_size = avpkt->size;
     int res = 0;
-    unsigned int w, h;
+    unsigned int w, h, pitch;
 
     res = ctx->m_decode(ctx->m_decoder, buf, buf_size);
     if (res) {
         return res;
     }
 
-    w = ctx->m_get_width(ctx->m_decoder);
-    h = ctx->m_get_height(ctx->m_decoder);
-    //pitch = ctx->m_get_pitch(ctx->m_decoder);
+    frame->width = w = ctx->m_get_width(ctx->m_decoder);
+    frame->height = h = ctx->m_get_height(ctx->m_decoder);
+    pitch = ctx->m_get_pitch(ctx->m_decoder);
 
     if (w != avctx->width || h != avctx->height) {
         if ((res = ff_set_dimensions(avctx, w, h)) < 0)
@@ -114,10 +116,12 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
         avctx->pix_fmt = AV_PIX_FMT_YUV422P12;
     }
 
+
     if ((res = ff_get_buffer(avctx, frame, 0)) < 0)
         return res;
 
     ctx->m_read2d(ctx->m_decoder, frame->data, frame->linesize);
+    ctx->m_clean(ctx->m_decoder);
 
     frame->pict_type = AV_PICTURE_TYPE_I;
     frame->key_frame = 1;
